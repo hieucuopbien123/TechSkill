@@ -1,0 +1,77 @@
+-> Inversion of control:
+Thông thường class A dùng 1 hàm của class B, A sẽ khởi tạo new B() bên trong hàm cần sử dụng. Tức A phụ thuộc cứng vào B (dependency), sửa B sẽ phải sửa A, dùng B khác sẽ phải tạo class A mới. IoC tức là tạo 1 interface của B dùng trong A và bắn vào thông qua setter hoặc constructor, khi đó A không phụ thuộc cứng vào B mà B phải phụ thuộc IB để dùng được trong A, tức đảo ngược phụ thuộc. Muốn dùng A với B1, B2 thì chỉ cần truyền vào setter khác đi là đươc.
+
+public interface IHorn { public void Beep(); }
+public class SmallHorn: IHorn { public void Beep () => Console.WriteLine ("Beep"); }
+public class BigHorn: IHorn { public void Beep () => Console.WriteLine ("Beep-beep-beep...."); }
+public class Car {
+    Horn horn;
+    public Car(IHorn horn) => this.horn = horn;
+    public void Beep () {
+        horn.Beep ();
+    }
+}
+IHorn horn = new BigHorn();
+var car = new Car(horn);
+car.Beep(); 
+=> Việc dùng interface là tuân thủ nguyên tắc Dependency Inversion Principle(DIP) trong thiết kế SOLID. Nhưng nếu không có nhiều loại Horn khác nhau thì họ có thể inject trực tiếp class Horn mà không cần dùng interface. Điều này vẫn tốt hơn trường hợp gọi new Horn() trong class Car, vì nếu constructor của hàm Horn thay đổi, sẽ phải sửa code trong class Car là k ổn.
+
+--> Dependency Injection:
+1 implement cụ thể để đạt được IoC. Thật ra chỉ là 1 cách để quản lý, nó dùng riêng 1 class container là ServiceProvider để các class service register vào và lấy ra tiện thôi.
+
+class DIContainer {
+    constructor() {
+        this.singletons = {};
+        this.transients = {};
+    }
+    addSingleton(name, constructor) {
+        this.singletons[name] = {
+            constructor: constructor,
+            instance: null
+        };
+    }
+    addTransient(name, constructor) {
+        this.transients[name] = constructor;
+    }
+    get(name) {
+        if (this.singletons[name]) {
+            const singleton = this.singletons[name];
+            if (!singleton.instance) {
+                singleton.instance = new singleton.constructor();
+            }
+            return singleton.instance;
+        }
+        if (this.transients[name]) {
+            return new this.transients[name]();
+        }
+        throw new Error(`Dependency '${name}' not found.`);
+    }
+    inject(func) {
+        const args = Reflect.getMetadata('design:paramtypes', func) || [];
+        const resolvedArgs = args.map(arg => this.singletons.get(arg.name) ?? this.transients.get(arg.name));
+        return func(...resolvedArgs);
+    }
+}
+class Logger {}
+class DatabaseService {}
+const container = new DIContainer();
+container.addSingleton('logger', Logger);
+container.addTransient('databaseService', DatabaseService);
+
+class UserController {
+    constructor(container) {
+        this.logger = container.get('logger');
+        this.databaseService = container.get('databaseService');
+    }    
+    constructor(databaseService, logger) {
+        this.databaseService = databaseService;
+        this.logger = logger;
+    }
+}
+const userController = new UserController(container);
+const userController = container.inject((databaseService, logger) => new UserController(databaseService, logger));
+
+
+
+-> 
+
