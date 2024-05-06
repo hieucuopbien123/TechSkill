@@ -1,0 +1,22 @@
+# Dùng delegate hay không
+Chỉ dùng delegate function khi cần xử lý hàm giữa 1 logic nhất định. Nếu không nên hạn chế dùng tránh callback hell.
+
+function test(params, callback){
+  // todo
+  let a = callback(params);
+  //todo
+}
+test(1, func);
+=> Dùng như này chỉ có ý nghĩa nếu hàm callback cần thực hiện sau 1 lượng logic nhất định. Nếu không thì gọi mẹ test(func(1)) nếu chỉ cần kết quả hàm
+
+
+
+# Optimize data structure
+Trong TH cơ bản thì dùng gì cũng được, nhưng yêu cầu về bộ nhớ và hiệu suất cao sẽ cần sử dụng đúng.
+Mảng động có thể thay đổi kích thước linh hoạt. (Tùy C++ phải giải phóng thủ công, C# List tự giải phóng, JS còn k có mảng tĩnh), nên dùng thay thế mảng tĩnh cố định. Truy cập phần tử theo index cực nhanh với O(1). 
+Hash có thể truy cập phần tử theo key hoặc check phần tử có tồn tại hay k với O(1). Tốn bộ nhớ nhất. 
+LinkedList ít dùng vì update nhiều mà truy vấn ít.
+
+
+
+

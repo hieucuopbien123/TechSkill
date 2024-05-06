@@ -1,0 +1,14 @@
+# Closure function
+1 hàm truy cập vào biến phạm vi bên ngoài, dù phạm vi bên ngoài đã kết thúc
+
+function test() {
+  let x = 1;
+  return function () {
+    console.log(x++);
+  };
+}
+const a = test();
+a();
+=> x vẫn tồn tại là 1 instance duy nhất trong a.
+
+

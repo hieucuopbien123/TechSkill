@@ -14,7 +14,7 @@ public class Car {
 IHorn horn = new BigHorn();
 var car = new Car(horn);
 car.Beep(); 
-=> Việc dùng interface là tuân thủ nguyên tắc Dependency Inversion Principle(DIP) trong thiết kế SOLID. Nhưng nếu không có nhiều loại Horn khác nhau thì họ có thể inject trực tiếp class Horn mà không cần dùng interface. Điều này vẫn tốt hơn trường hợp gọi new Horn() trong class Car, vì nếu constructor của hàm Horn thay đổi, sẽ phải sửa code trong class Car là k ổn.
+=> Việc dùng interface là tuân thủ nguyên tắc Dependency Inversion Principle(DIP) trong thiết kế SOLID. Nhưng nếu không có nhiều loại Horn khác nhau thì họ có thể inject trực tiếp class Horn mà không cần dùng interface (gọi new ở ngoài). Điều này vẫn tốt hơn trường hợp gọi new Horn() trong class Car, vì nếu constructor của hàm Horn thay đổi, sẽ phải sửa code trong class Car là k ổn.
 
 --> Dependency Injection:
 1 implement cụ thể để đạt được IoC. Thật ra chỉ là 1 cách để quản lý, nó dùng riêng 1 class container là ServiceProvider để các class service register vào và lấy ra tiện thôi.
@@ -33,23 +33,18 @@ class DIContainer {
     addTransient(name, constructor) {
         this.transients[name] = constructor;
     }
-    get(name) {
+    get(name, ...args) {
         if (this.singletons[name]) {
             const singleton = this.singletons[name];
             if (!singleton.instance) {
-                singleton.instance = new singleton.constructor();
+                singleton.instance = new singleton.constructor(...args);
             }
             return singleton.instance;
         }
         if (this.transients[name]) {
-            return new this.transients[name]();
+            return new this.transients[name](...args);
         }
         throw new Error(`Dependency '${name}' not found.`);
-    }
-    inject(func) {
-        const args = Reflect.getMetadata('design:paramtypes', func) || [];
-        const resolvedArgs = args.map(arg => this.singletons.get(arg.name) ?? this.transients.get(arg.name));
-        return func(...resolvedArgs);
     }
 }
 class Logger {}
@@ -61,17 +56,14 @@ container.addTransient('databaseService', DatabaseService);
 class UserController {
     constructor(container) {
         this.logger = container.get('logger');
-        this.databaseService = container.get('databaseService');
-    }    
-    constructor(databaseService, logger) {
-        this.databaseService = databaseService;
-        this.logger = logger;
+        this.databaseService = container.get('databaseService', arg1, arg2);
     }
 }
 const userController = new UserController(container);
-const userController = container.inject((databaseService, logger) => new UserController(databaseService, logger));
 
 
 
--> 
+# DP => ref tới "JS Advance / Design pattern" quá đầy đủ
+
+
 

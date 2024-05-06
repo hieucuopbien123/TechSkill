@@ -1,0 +1,68 @@
+# Implement cache 
+Thread safe cache, auto expire.
+
+using System;
+using System.Collections.Concurrent;
+using System.Threading;
+public class Cache<TKey, TValue> {
+    private ConcurrentDictionary<TKey, CacheItem> _cache = new ConcurrentDictionary<TKey, CacheItem>();
+    private Timer _expiryCheckTimer;
+    public Cache()
+    {
+        _expiryCheckTimer = new Timer(CheckForExpiredItems, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1)); // setInterval và setTimeout trong JS
+    }
+    public TValue Get(TKey key) {
+        if (_cache.TryGetValue(key, out CacheItem item)) {
+            if (DateTimeOffset.Now <= item.Expiry) {
+                return item.Value;
+            } else {
+                _cache.TryRemove(key, out _);
+            }
+        }
+        return default(TValue);
+    }
+    public void Set(TKey key, TValue value, TimeSpan ttl) {
+        var expiry = DateTimeOffset.Now.Add(ttl);
+        _cache[key] = new CacheItem { Value = value, Expiry = expiry };
+    }
+    public bool Remove(TKey key) {
+        return _cache.TryRemove(key, out _);
+    }
+    private class CacheItem{
+        public TValue Value { get; set; }
+        public DateTimeOffset Expiry { get; set; }
+    }
+    public void Clear()
+    {
+        _cache.Clear();
+    }
+    private void CheckForExpiredItems(object state) {
+        foreach (var key in _cache.Keys) {
+            if (_cache.TryGetValue(key, out CacheItem item)) {
+                if (item.Expiry != null && DateTimeOffset.Now > item.Expiry) {
+                    _cache.TryRemove(key, out _);
+                }
+            }
+        }
+    }
+}
+=> Nếu không dùng ConcurrentDictionary có sẵn của C# thì mỗi bước thêm lock vào là được.
+
+
+
+# Tiêu chuẩn
+1 ngôn ngữ: JS, C#
+1 framework frontend web: React, NextJS
+1 framework UI: MUI, tailwind, ChakraUI
+1 lib 3D: ThreeJS
+1 server backend web: NodeJS, ASP.NET
+1 framework manage database: mongoose, EFCore
+1 framework frontend quản lý state: Redux, React-Query
+Tools: Swagger, Nginx, Postman, GithubActions, Firebase, Docker
+
+
+
+# 
+
+
+

@@ -1,0 +1,12 @@
+# Crawling server
+TH1: Server liên tục crawl data tĩnh từ 1 nguồn, nếu có data mới thì update vào DB => ez
+Nhiều nền tảng họ tạo riêng 1 server để crawl hết các container cần crawl về trước và cung ra API, rồi server sẽ query data trong phạm vi container đó, để tránh crawl data thừa.
+TH2: Server liên tục crawl data từ 1 nguồn, data đó liên tục thay đổi và có dấu thời gian, lượng data rất nhiều và không thể crawl hết 1 lúc. Ta có thể dừng lại và crawl tiếp từ vị trí trước bất cứ lúc nào. Khi crawl đến vị trí mới nhất, server tiếp tục chờ update realtime với data mới.
+Đơn giản là lưu cả dấu thời gian vào db, cứ crawl là lấy dấu thời gian đó query tiếp cho tới hiện tại hoặc tới 1 mốc interval tiếp theo nếu sợ quá nhiều data cùng 1 lúc. Nếu k có data tức là nó đang uptodate
+
+
+
+# 
+
+
+

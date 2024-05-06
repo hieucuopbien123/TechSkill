@@ -1,0 +1,271 @@
+# Implement message queue
+Message queue là 1 queue có thể add task vào và pop task ra thực thi lần lượt. Queue có giới hạn khi đầy sẽ k nhận task mới. 1 class khác sẽ liên tục check queue có task thì lấy ra xử lý trên 1 thread riêng. Queue tồn tại trong suốt vòng đời của chương trình. Queue bị giới hạn bởi 100 phần tử, số lượng thread max giới hạn ở 5 thread. Có thể dừng và bắt đầu queue bất cứ lúc nào sẽ thực hiện tiếp từ chỗ cũ.
+Trong hướng đối tượng ta dùng class handler và class lưu kiểu data riêng để lấy xử lý MQ
+
+// Class data
+public class DataA {
+    public string Message { get; set; }
+}
+public class DataB {
+    public int Number { get; set; }
+}
+public class TaskItem {
+    public string Type { get; set; }
+    public string Data { get; set; }
+}
+// Class handler
+using Newtonsoft.Json;
+public interface ITaskHandler {
+    void Handle(string data);
+}
+public class TypeAHandler : ITaskHandler {
+    public void Handle(string data) {
+        var dataA = JsonConvert.DeserializeObject<DataA>(data);
+        Console.WriteLine($"Handling TypeA: {dataA.Message}");
+    }
+}
+public class TypeBHandler : ITaskHandler {
+    public void Handle(string data) {
+        var dataB = JsonConvert.DeserializeObject<DataB>(data);
+        Console.WriteLine($"Handling TypeB: {dataB.Number}");
+    }
+}
+// Use
+var handlers = new Dictionary<string, ITaskHandler>
+{
+    { "TypeA", new TypeAHandler() },
+    { "TypeB", new TypeBHandler() }
+};
+var taskQueue = new MessageQueue(handlers: handlers, capacity: 10);
+taskQueue.TryEnqueue(new TaskItem("TypeA", JsonConvert.Serialize<DataA>(new DataA { Message = "Hello, TypeA!" })));
+taskQueue.TryEnqueue(new TaskItem("TypeB", JsonConvert.Serialize<DataB>(new DataB { Number = 42 })));
+taskQueue.StopProcessing();
+taskQueue.Resume();
+// MQ
+public class MessageQueue {
+  private readonly ConcurrentQueue<TaskItem> _taskQueue;
+  private readonly Dictionary<string, ITaskHandler> _handlers;
+  private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+  private readonly int _capacity;
+  private SemaphoreSlim semaphore = new SemaphoreSlim(5);
+  public bool isStarted;
+  public MessageQueue(Dictionary<string, ITaskHandler> handlers, int capacity = 100) {
+      _capacity = capacity;
+      _handlers = handlers;
+      _taskQueue = new ConcurrentQueue<TaskItem>();
+      isStarted = false;
+  }
+  public void StartWorkers() {
+    if(isStarted) return;
+    else isStarted = true;
+    Task.Run(async () => {
+      while(!_cancellationTokenSource.IsCancellationRequested){
+        if(_taskQueue.TryDequeue(out TaskItem message)){
+          await semaphore.WaitAsync();
+          Task.Run(async () => await ProcessTask(message));
+        }
+        await Task.Delay(500);
+      }
+    });
+  }
+  private async Task ProcessTask(TaskItem taskItem) {
+    try {
+      if (_handlers.TryGetValue(taskItem.Type, out var handler)) {
+        await handler.Handle(taskItem.Data);
+      }
+    } catch(Exception err) {
+      Console.WriteLine("Error:: " + err.ToString());
+    } finally {
+      semaphore.Release();
+    }
+  }
+  public bool TryEnqueue(TaskItem taskItem) {
+    if(_taskQueue.Count >= _capacity) {
+      return false;
+    }    
+    _taskQueue.Enqueue(taskItem);
+    return true;
+  }
+  public void StopProcessing() {
+    isStarted = false;
+    _cancellationTokenSource.Cancel();
+  }
+  public void ResumeProcess() {
+    if (_cancellationTokenSource.IsCancellationRequested) {
+       _cancellationTokenSource = new CancellationTokenSource();
+       StartWorkers();
+    }
+  }
+}
+=> Trong C# có class BlockingCollection tương tự nhưng tự động hỗ trợ capacity và chờ khi queue rỗng mà không cần sleep thủ công.
+=> Có thể lưu message queue bằng database thay vì code để tránh mất data qtr của user khi dừng server.
+
+Cách tạo khá dễ: khi chạy sẽ tạo thread riêng lấy từ queue ra thực hiện sau mỗi 1s, hàm thực hiện cho lên thread riêng. Khi add thì check queue chưa full thì add. Để stop thì dừng vòng loop lại, khi resume lại chạy tiếp loop, queue vẫn có data sẽ thực hiện tiếp từ chỗ cũ.
+
+
+
+# Chia file server hệ thống lớn => tùy loại framework
+1) NodeJS: việc chia file khá hiển nhiên.
+src
+  api
+    v1
+    v2
+      routes
+        auth.route.js
+        blog.route.js
+      controllers
+        auth.controller.js
+        blog.controller.js
+        index.js
+      utils
+        staticvalidationhelper.js
+        staticutility.js
+      middlewares
+      models  
+        blog.js
+        bloguser.js
+      services
+        jwt.service.js
+        blog.service.js
+      validations
+      logs
+  config
+    database.config.js
+    redis.config.js
+    index.js
+tests
+.env.dev
+.env.prod
+database.js => connect db
+index.js => run main function
+server.js => start server nodejs
+test.http => test api
+
+=> Có thể tùy biến chia theo module để navigate tới các hàm liên quan nhanh chóng tùy ý. VD:
+src/api/v1/user
+  user.service.js
+  user.test.js
+  user.model.js
+  user.controller.js
+  user.handler.js
+
+2) ASP.NET hướng đối tượng phức tạp:
+Smp.Web (dự án chính)
+
+  Controllers (folder)
+    Voice (folder)
+      VoicePolicyController.cs
+      VoiceUserController.cs
+    Teams (folder)
+    HomeController.cs
+    EmailController.cs
+  Attributes (folder)
+    LicenseAttribute.cs
+    AuditorAttribute.cs
+  Middlewares (folder)
+  Models (folder) => model mà chỉ dùng trong Smp.Web
+
+  appsettings.Development.json
+  appsettings.Production.json
+  Program.cs => chạy hàm main
+  Startup.cs => file setup
+
+Voice (folder)
+  Voice.Service (library)
+    Actions (folder)
+      VoiceScanPolicyAction.cs
+      VoiceScanCallQueueAction.cs
+    Interface (folder)
+    Service (folder)
+      VoicePolicyService.cs
+      VoiceCallQueueService.cs
+
+PowerPlatform (folder)
+  PowerPlatform.Service (library)
+    Impl (folder)
+      PowerApps(folder)
+        PowerPlatformPowerAppsService.cs
+        PowerPlatformPowerAppsFromDBService.cs
+      Environment (folder)
+
+Common (folder)
+  Smp.Database.Core (library)
+
+  Smp.Common(library)
+    Job (folder)
+      IJobAction.cs
+      JobContext.cs
+    Helpers (folder)
+      CipherHelper.cs
+      LoginHelper.cs
+    Models (folder)
+      AuditorInfo.cs
+      ProcessCenterModel.cs
+
+  Smp.Service.Common (library)
+    GraphClient (folder)
+    Login (folder)
+      LoginService.cs
+      PrincipalService.cs
+    Storage (folder)
+      BlobStorageService.cs
+      TableStorageService.cs
+
+=> Ở cấp độ folder và dự án và library, dường như có thể chia tùy biến theo phạm vi trên nhìn rất rõ scope của từng phần.
+Chia kiểu này khá chuẩn, thấy đỡ hơn là chia từng module ngay:
+Tính năng của ngôn ngữ 1
+  Tính năng của ngôn ngữ 2
+    Các folder chia theo từng module business (lại lồng nhau tiếp)
+      Classes.cs
+=> 1 class có thể rơi vào 4 TH:
+Class là static => là class mà gọi ở bất cứ đâu trong dự án miễn có reference, gọi dùng các hàm utility, dùng extension method, có thể lưu state (singleton) hoặc chỉ xử lý logic mà k lưu gì cả
+Class là service => class service được DI vào bất cứ dự án server nào và lấy ra dùng trong các class khác
+Class chuẩn có sẵn của C# => class C# yêu cầu phải có chuẩn như controllers, appsettings, startup, config cho các dịch vụ như log4net, class Attribute
+Class thường => class kiểu để setup cho 1 thứ khác do ta định nghĩa. VD class chuyên lưu enum struct, class xử lý CreateMap để setup cho AutoMapper, class ánh xạ enum sang i18n. Class kiểu truyền thống, trong phạm vi nó được add reference, ta có thể khởi tạo với new và sử dụng các tính năng. VD class Repository khởi tạo new trong UnitOfWork, UnitOfWork khởi tạo new để sử dụng trong class Service được DI
+
+=> Nên tìm hiểu mỗi class thuộc kiểu gì, nằm ở đâu, và lấy ra dùng như thế nào
+
+
+
+# Chia file frontend hệ thống lớn
+Đặc tính của frontend là tái sử dụng component nếu có điểm chung.
+src (folder)
+
+  api (folder)
+    calling (folder) => call API cho calling
+    powerplatform (folder) => call API cho powerplatform
+    helpers (folder) => enum, utility liên quan tới API
+
+  app (folder)
+    common (folder) => common component theo phong cách atomic
+    structure (folder) => component kiểu loading, error, headers, router
+    pages (folder)
+      calling (folder)
+        callingpolicy => component trong calling policy. Chia tiếp folder con
+        callqueues => component trong callqueues
+      powerplatform (folder) => tương tự
+    index.js
+    index.css
+
+  redux (folder)
+    actions (folder)
+      calling
+      powerplatforms 
+    reducers (folder)
+      calling
+      powerplatforms
+    store (folder)
+
+  util (folder) => chứa các folder và file utility, helper
+  model (folder) => chứa interface, type, struct
+
+  index.html
+  index.js
+libsetting.js
+.env.dev
+.env.prod
+=> Khá lý tưởng cho 1 dự án lớn mà có nhiều module độc lập nhau. Có thể tùy biến được. 
+Vì thực tế chỉ có 2 cách: nếu chia theo chức năng như này thì mỗi chức năng kiểu gì cũng phải có từng thư mục cho các module từng phần của hệ thống vì chúng độc lập nhau; nếu chia theo module luôn thì k ổn khi ref tới chết mệt mà mỗi module có thể cấu trúc thư mục khác nhau nên cách trên better.
+
+=> Chia file cho NextJS14 cũng nên tương tự React. Routing nên để trong src/pages, các folder khác nên tư duy giống React18
+

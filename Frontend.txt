@@ -1,0 +1,64 @@
+# Kỹ thuật cut html của bất cứ page nào => ref tới "HTML_CSS_JS"
+
+
+
+# Debounce:
+Delay trigger function sau một khoảng thời gian xác định kể từ lần cuối cùng hàm được gọi.
+
+function debounce(func, delay) {
+  let timeoutId;
+  return function (...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      func.apply(this, args);
+    }, delay);
+  };
+}
+const debouncedFunction = debounce(() => {
+  console.log('Function debounced!');
+}, 500);
+debouncedFunction();
+
+
+
+# Throttle
+Gọi hàm tại mỗi khoảng thời gian xác định, nhưng không quá một lần trong mỗi khoảng thời gian đó (giảm tần suất).
+
+function throttle(func, delay) {
+  let lastCallTime = 0;
+  return function (...args) {
+    const currentTime = Date.now();
+    if (currentTime - lastCallTime >= delay) {
+      lastCallTime = currentTime;
+      func.apply(this, args);
+    }
+  };
+}
+const throttledFunction = throttle(() => {
+  console.log('Function throttled!');
+}, 500);
+throttledFunction();
+
+
+
+# Call api retryable => ref tới "# Dùng retryable"
+Khi request bị lỗi, không nên die ngay để người dùng phải fetch lại trang, nên cho chờ 1 khoảng random exponential backoff, càng sai chờ càng lâu (trong TH có thể refetch lại sẽ thành công)
+
+static async fetchWithRetry(url, errorCount = 0) => {
+  const ERROR_COUNT_MAX = 3;
+  const response = await fetch(url);
+  if(response.status < 200 || response.status >= 300) {
+    // Log lỗi 
+    if(errorCount < ERROR_COUNT_MAX && là lỗi cần retry){
+      await new Promise(r => setTimeout(r, 
+        Math.pow(2, errorCount)*3000 + Math.random()*1000
+      ));
+      await this.fetchWithRetry(url, errorCount + 1);
+    }
+  }
+}
+=> Fail thì check lỗi từ đâu, phải là lỗi network hay gì mới retry chứ lỗi logic thì dừng luôn
+
+
+
+

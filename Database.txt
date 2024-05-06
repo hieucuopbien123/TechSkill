@@ -1,0 +1,14 @@
+# Bản chất index trong relational database
+Đánh index(A,B) thì search theo (A) hoặc (A,B) sẽ nhanh, search theo B sẽ chậm.
+Khi search sẽ nhanh nhưng trong TH search string thì chỉ có tác dụng với 'pattern%', còn '%pattern%' sẽ k dùng index. Để tốc độ cao phải CREATE FULLTEXT CATALOG để tạo full text search index riêng trong SQL Server.
+Khi tạo bảng mặc định primary key sẽ là clustered index chỉ có 1. Chạy lệnh CREATE INDEX trên 2 cột khác nhau thì 2 cột đó mặc định dùng non-clustered index. NN vì clustered index thay đổi thứ tự lưu data trên dữ liệu gốc, non-clustered index tạo lưu chỉ mục ở 1 nơi riêng (VD BTree) và ta phải truy vấn đến đó trước để lấy địa chỉ data rồi mới truy cập vào data.
+Đánh index làm tốc độ update data chậm đi, non-clustered index còn tốn thêm không gian lưu trữ.
+
+K nên đánh chỉ mục khi các bảng có kích thước nhỏ, hay được cập nhập dữ liệu thường xuyên hoặc các cột có nhiều giá trị NULL
+VD có 2 giá trị male và femail: FMFMFMFMF -> mỗi mem page chơi 2 block thì đánh chỉ mục index tốc độ y hệt như duyệt tuần tự, k có ích gì.
+
+
+
+# 
+
+

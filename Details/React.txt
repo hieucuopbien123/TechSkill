@@ -1,0 +1,88 @@
+# Cách viết chuẩn React 18
+Khi có side effect, hãy dùng trong custom hook. Custom hook có thể tạo ra thông qua 1 file js or ts, đặt tên có use và import React from "react", thay vì return jsx chỉ cần return data bth là dùng.
+Ta có thể chỉ dùng custom hook toàn dự án cũng được, nếu dùng bất cứ loại hook có sẵn nào của React thì dependency phải đầy đủ mọi hàm và biến nó gọi. Các hàm đó cũng phải useCallback hay useMemo mà ra. Mọi thứ đều phải phụ thuộc
+
+1) Bình thường ta dùng useEffect để gọi 1 hàm async await bình thường fetch data lần đầu tiên. Ta viết hàm đó trực tiếp trong component và nghĩ rằng hàm đó k thể thay đổi do có const đằng trước. Thực tế hàm đó luôn được tạo lại ở mỗi lần render và luôn dùng phiên bản mới nhất vì các data trong hàm được lấy từ hook, nếu chúng thay đổi cũng sẽ rerender lại component và hàm lại tạo với data mới tiếp.
+Nhưng bây giờ yêu cầu phải luôn dùng useCallback và useMemo hay custom hook với mọi loại hàm, dù điều này trái ngược với nguyên tắc ta biết là useCallback có thể k giúp ích gì cả. (Note useCallback mà k đủ dependency có thể sẽ luôn dùng phiên bản cũ dẫn đến data sai đó nha)
+Trừ số ít TH k dùng được thì thêm // eslint-disable-line => Nhưng ta có thể ép chuẩn rule với useRef
+
+const initRef = React.useRef(null);
+const fetchAttempted = React.useRef(false);
+React.useEffect(() => {
+  initRef.current = async () => {
+    if (!fetchAttempted.current) {
+      if (auctionFetchingStatus !== FS.SUCCESS) {
+        fetchAttempted.current = true;
+        await Promise.all([dispatch(fetchAllAuction())]);
+      }
+    } else {
+      await Promise.all([dispatch(fetchAllAuction())]);
+    }
+  };
+}, [auctionFetchingStatus, dispatch]);
+React.useEffect(() => {
+  initRef.current();
+}, [needRefetch]);
+=> auctionFetchingStatus sẽ k gọi lại hàm fetch nhưng vẫn update hàm
+
+Nếu gọi nhiều hàm lồng nhau từ base, cứ viết custom hook lồng nhau liên tục cho đến hook base. Liên tục return các hàm useCallback. 
+Tương tự useMemo với data cấu thành từ state, nếu tái sử dụng nhiều nơi có thể cùng custom hook ở file riêng. Còn không thì khai báo const trực tiếp trong file như bth cũng k trái rule
+
+2) 1 pages fetch lại data, cách trigger 1 pages khác ở xa cũng fetch lại data:
+Dùng ReactContext hoặc redux cung ra hàm refetchData. Nên viết 1 file riêng gọi hàm fetchData với type, type nào thì component pages nào cần rerender. Nên tạo thêm 1 custom hook bên trong gọi hàm fetchData kèm dependency và cung ra hàm đó 
+
+VD: Component A update data cần component B rerender -> component A gọi hàm refetch của react context truyền vào type X -> react context check map type X thì B cần refetch nên đổi refetchB -> component B dùng custom hook gọi hàm initB có dependency là refetchB sẽ rerender. Cần viết sao cho componentB luôn refetch nếu refetchB lật bit.
+
+Bản chất React ta nghĩ là phụ thuộc vào nhau, ví dụ component A đổi data thì component B refetch thì component B nên có data dependency là A. Nhưng trong blockchain nó éo như v, 1 component xa lắc xa lơ có thể call refetch của nhau nên k được trừ khi tất cả lưu vào redux
+
+3) ***Bản chất***Giả sử ta click 1 button gọi 1 API độc lập, API này k phụ thuộc vào state gì cả thì liệu hàm đó có cần useCallback không? => K cần, có thể tạo file riêng or định nghĩa ngay hàm const trong component 
+- Ta có thể khai báo bất cứ loại hàm gì export ở 1 file riêng và sử dụng ở mọi component khác nhau nếu nó k phụ thuộc vào state props 
+- 1 hàm số được khai báo trong component nếu cần dùng state props của component đó. Khi hàm đơn giản và k phụ thuộc vào hook khác thì khai báo const. Hàm phức tạp k muốn khởi tạo lại nhiều hoặc dùng kết hợp nhiều hook khác thì dùng useCallback sẽ memoize. Hàm mà tái sử dụng ở nhiều nơi thì tách ra custom hook (or dùng các pp khác như hàm fetchReduxThunk).
+
+Trường hợp 1 hàm phụ thuộc vào hook khác, được gọi trong 1 hook khác thì hook đó phải chứa dependency hàm, hàm đó bị ép không thể dùng const. Vì nếu hàm đó dùng const sẽ render lại mỗi vòng, mỗi lần render như thế address của hàm đổi, hook kia thấy đổi sẽ gọi tiếp thành ra bị maximum depth. Hàm buộc là useCallback mà là hook thì phải liệt kê tất cả dependency, nếu ta muốn làm kiểu setCounter(counter + 1) thì phải liệt kê counter vào dependency, môi lần gọi thì useCallback sẽ render hàm mới, useEffect sẽ chạy tiếp vì đổi counter nên sẽ gọi vô tận hàm => fix với setCounter(val => val + 1); Tức là cứ viết như vậy thì mọi hàm cần gọi hoặc là sẽ gọi đến cuối cùng là 1 hàm không còn dependency nó đổi, hoặc là hàm external klq tới state nữa
+Dùng custom hook hay để ngay trong component đều gặp tình huống đó thôi. Custom hook chỉ là 1 cách chia tái sử dụng, k giúp được gì.
+
+4) Các case khác:
+const [test, setTest] = useState(false); => phụ thuộc vào test thì cần dependency nhưng setTest thì không
+Hàm async hay không async ta đều xử lý như nhau
+
+Với các hàm logic bình thường:
+VD1:   
+const debounceCallRefetchData = useCallback(
+  debounce(() => { setRefetchData(false); }, 11000),
+  []
+);
+VD2:   
+const debounceCallRefetchData = debounce(() => {
+  setRefetchData(false);
+}, 11000);
+=> Nên dùng C2 vì C1 có hàm đơn giản và k có phụ thuộc gì vào state props.
+
+-> Dấu hiệu tách component: khi tái sử dụng; khi 1 component mà query 2 api hiển thị 2 nơi
+
+
+
+# Bản chất state của React
+Khi dùng useEffect và định nghĩa 1 hàm bên trong (kể cả là hàm const hay hàm trong setInterval), hàm đó là cố định giống useCallback, các tham số cũng là cố định và chỉ khởi tạo lại nếu dependency thay đổi vì useEffect chạy lại mà.
+Tức là component rerender nếu bất cứ state props bên trong đổi. Các state props function const cũng luôn là mới nhất ở mỗi lần rerender trừ khi các cái đó phụ thuộc vào 1 hook dependency thì nó mới tạo lại tùy theo dependency.
+useEffect chỉ gọi hàm return, nếu 1 useEffect đấy bị gọi lại thì nó hủy instance cũ để tạo lại.
+
+
+
+# Tối ưu SEO và performance với NextJS => ref tới "Projects / MoveWorld"
+Thiết kế placeholder sao cho k có layout shift ở mọi màn hình cả text và ảnh.
+Thuộc tính priority (preload) của Image có tác dụng xđ hình ảnh ưu tiên cần tải trước các hình khác trên trang. Dùng thuộc tính optimize ảnh của nextjs tự tối ưu hóa theo kích thước màn hình. Nên dùng local image hơn là url để next tối ưu và tự động có lazy loading. Dùng onError và blurData tạo hiệu ứng. 
+Tối ưu hóa ảnh và font trong docs nextjs, tải hẳn về chứ k dùng API.
+Setup SEO với DefaultSeoTag và đầy đủ mọi thẻ Head ở từng trang. Tối ưu hóa page insight. Dùng đủ các thẻ canonical và open-graph, chuẩn bị các ảnh cho thẻ preload thumbnail khi nhúng vào web khác. 
+Tối ưu dùng JS và css thuần, xóa bỏ các file không dùng. Dùng tree-shaking cho mọi thư viện, nên dùng ít thư viện nhất có thể và nên tự implement (check bằng webpack-bundle-analyzer), hoặc đổi sang thư viện nhẹ hơn.
+Dùng dynamic import cho các phần tử k chắc chắn dùng luôn khi vào page (React thì là React.lazy). Nên dùng thẻ Link của nextjs để tận dụng prefetch hoặc router.prefetch(url) thủ công.
+Dùng getStaticProps nhiều nhất có thể, dùng getServerSideProps với request nhẹ lấy data chỉ cần cho SEO thôi, k cần realtime thì nên dùng revalidate + getStaticProps. 
+
+
+
+# 
+
+
+
+
+
